@@ -1,26 +1,50 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../services/api_service.dart';
 import '../widgets/custom_button.dart';
 import 'success_screen.dart';
 
 class ResultScreen extends StatefulWidget {
-  final String recognizedText;
+  final String imagePath;
 
-  const ResultScreen({super.key, required this.recognizedText});
+  const ResultScreen({super.key, required this.imagePath});
 
   @override
   State<ResultScreen> createState() => _ResultScreenState();
 }
 
 class _ResultScreenState extends State<ResultScreen> {
-  late final TextEditingController _textController;
+  late TextEditingController _textController;
   final _emailController = TextEditingController();
   bool _loading = false;
+  bool _ocrLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _textController = TextEditingController(text: widget.recognizedText);
+    _textController = TextEditingController();
+    _runOcr();
+  }
+
+  Future<void> _runOcr() async {
+    try {
+      final inputImage = InputImage.fromFilePath(widget.imagePath);
+      final textRecognizer = TextRecognizer();
+      final recognizedText = await textRecognizer.processImage(inputImage);
+
+      setState(() {
+        _textController.text = recognizedText.text;
+        _ocrLoading = false;
+      });
+
+      textRecognizer.close();
+    } catch (e) {
+      setState(() {
+        _textController.text = 'Ошибка OCR: $e';
+        _ocrLoading = false;
+      });
+    }
   }
 
   Future<void> _send() async {
@@ -58,11 +82,13 @@ class _ResultScreenState extends State<ResultScreen> {
           children: [
             const Text('Распознанный текст:'),
             const SizedBox(height: 8),
-            TextField(
-              controller: _textController,
-              maxLines: 5,
-              decoration: const InputDecoration(border: OutlineInputBorder()),
-            ),
+            _ocrLoading
+                ? const Center(child: CircularProgressIndicator())
+                : TextField(
+                    controller: _textController,
+                    maxLines: 5,
+                    decoration: const InputDecoration(border: OutlineInputBorder()),
+                  ),
             const SizedBox(height: 16),
             const Text('Email получателя:'),
             const SizedBox(height: 8),
