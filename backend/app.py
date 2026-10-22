@@ -19,7 +19,6 @@ SMTP_CONFIG = {
 }
 
 TARGET_EMAIL = os.getenv('TARGET_EMAIL')
-ARCHIVE_PASSWORD = os.getenv('ARCHIVE_PASSWORD', 'secret123')
 
 # Инициализируем EasyOCR ОДИН РАЗ при старте сервера (чтобы не грузить модель на каждый запрос)
 # 'ru' - русский, 'en' - английский (для номеров и латиницы)
@@ -31,34 +30,77 @@ print("EasyOCR готов к работе!")
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    data = request.json
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return jsonify({
+            "status": "error",
+            "message": "Invalid JSON request"
+        }), 400
+
     text = data.get('text', '')
-    target_email = data.get('email', TARGET_EMAIL)
-    password = data.get('password', ARCHIVE_PASSWORD)
+    target_email = data.get('email', '')
+    password = data.get('password', '')
 
-    if not target_email:
-        return jsonify({"status": "error", "message": "Email required"}), 400
+    if not isinstance(target_email, str) or not target_email.strip():
+        return jsonify({
+            "status": "error",
+            "message": "Email required"
+        }), 400
 
-    # 1. Сохранить текст во временный файл (обязательно указываем utf-8)
-    with open('passport.txt', 'w', encoding='utf-8') as f:
-        f.write(text)
+    if not isinstance(password, str) or not password.strip():
+        return jsonify({
+            "status": "error",
+            "message": "Archive password required"
+        }), 400
 
-    # 2. Создать 7z с паролем
-    with py7zr.SevenZipFile('passport.7z', 'w', password=password) as archive:
-        archive.write('passport.txt', 'passport.txt')
+    if not isinstance(text, str) or not text.strip():
+        return jsonify({
+            "status": "error",
+            "message": "Passport text required"
+        }), 400
 
-    # 3. Удалить временный .txt (архив остаётся)
-    os.remove('passport.txt')
+    target_email = target_email.strip()
 
-    # 4. Отправить архив на email
     try:
+        # 1. Сохраняем распознанный текст во временный файл
+        with open('passport.txt', 'w', encoding='utf-8') as f:
+            f.write(text)
+
+        # 2. Создаём архив с паролем, введённым в приложении
+        with py7zr.SevenZipFile(
+            'passport.7z',
+            'w',
+            password=password
+        ) as archive:
+            archive.write('passport.txt', 'passport.txt')
+
+        # 3. Отправляем архив на указанный email
         send_archive(target_email, 'passport.7z', SMTP_CONFIG)
-    except Exception as e:
-        print(f"!!! ОШИБКА ОТПРАВКИ EMAIL: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
 
-    return jsonify({"status": "ok", "message": f"Sent to {target_email}"})
+        return jsonify({
+            "status": "ok",
+            "message": f"Sent to {target_email}"
+        })
 
+    except Exception:
+        app.logger.exception("Ошибка создания или отправки архива")
+        return jsonify({
+            "status": "error",
+            "message": "Не удалось создать или отправить архив"
+        }), 500
+
+    finally:
+        # Удаляем временные файлы и при успехе, и при ошибке
+        for filename in ('passport.txt', 'passport.7z'):
+            if os.path.exists(filename):
+                try:
+                    os.remove(filename)
+                except OSError:
+                    app.logger.exception(
+                        "Не удалось удалить временный файл: %s",
+                        filename
+                    )
 
 @app.route('/ocr', methods=['POST'])
 def ocr_passport():

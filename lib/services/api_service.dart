@@ -28,11 +28,16 @@ class ApiService {
   static Future<String> sendPassport({
     required String text,
     required String email,
+    required String password,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/upload'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'text': text, 'email': email}),
+      body: jsonEncode({
+        'text': text,
+        'email': email,
+        'password': password,
+      }),
     );
 
     if (response.statusCode == 200) {
