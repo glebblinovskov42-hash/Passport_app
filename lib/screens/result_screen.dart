@@ -1,6 +1,4 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../services/api_service.dart';
 import '../widgets/custom_button.dart';
 import 'success_screen.dart';
@@ -24,21 +22,17 @@ class _ResultScreenState extends State<ResultScreen> {
   void initState() {
     super.initState();
     _textController = TextEditingController();
-    _runOcr();
+    _runOcrOnServer(); // Отправляем фото на сервер при открытии экрана
   }
 
-  Future<void> _runOcr() async {
+  // Отправка фото на сервер для распознавания
+  Future<void> _runOcrOnServer() async {
     try {
-      final inputImage = InputImage.fromFilePath(widget.imagePath);
-      final textRecognizer = TextRecognizer();
-      final recognizedText = await textRecognizer.processImage(inputImage);
-
+      final text = await ApiService.recognizePassport(widget.imagePath);
       setState(() {
-        _textController.text = recognizedText.text;
+        _textController.text = text;
         _ocrLoading = false;
       });
-
-      textRecognizer.close();
     } catch (e) {
       setState(() {
         _textController.text = 'Ошибка OCR: $e';
