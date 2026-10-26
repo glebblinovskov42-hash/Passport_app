@@ -5,3 +5,4 @@ __pycache__/
 .env
 passport.7z
 passport.txt
+.sentry-native/
